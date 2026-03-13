@@ -63,7 +63,12 @@ ENDCONFIG
         define('sugarEntry', true);
         \$_SERVER['HTTP_HOST'] = 'localhost';
         \$_SERVER['SERVER_NAME'] = 'localhost';
+        \$_SERVER['SERVER_PORT'] = '80';
         \$_SERVER['REQUEST_URI'] = '/install.php';
+        \$_SERVER['SCRIPT_NAME'] = '/install.php';
+        \$_SERVER['DOCUMENT_ROOT'] = '/var/www/html';
+        \$_SERVER['SCRIPT_FILENAME'] = '/var/www/html/install.php';
+        \$_SERVER['PHP_SELF'] = '/install.php';
         \$_GET['goto'] = 'SilentInstall';
         \$_GET['cli'] = true;
         include 'install.php';
