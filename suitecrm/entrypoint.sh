@@ -24,9 +24,9 @@ until (echo > /dev/tcp/$DB_HOST/$DB_PORT) 2>/dev/null; do
 done
 echo "==> MySQL port is open."
 
-# Run silent install only once (config.php doesn't exist yet)
+# Write silent-install config so the web installer auto-populates on first visit
 if [ ! -f /var/www/html/config.php ]; then
-    echo "==> First run — writing config_si.php..."
+    echo "==> First run — writing config_si.php for web installer..."
 
     cat > /var/www/html/config_si.php << ENDCONFIG
 <?php
@@ -57,29 +57,8 @@ if [ ! -f /var/www/html/config.php ]; then
 );
 ENDCONFIG
 
-    echo "==> Running PHP CLI silent installer (this may take a few minutes)..."
-    cd /var/www/html
-    php -d memory_limit=512M -r "
-        define('sugarEntry', true);
-        \$_SERVER['HTTP_HOST'] = 'localhost';
-        \$_SERVER['SERVER_NAME'] = 'localhost';
-        \$_SERVER['SERVER_PORT'] = '80';
-        \$_SERVER['REQUEST_URI'] = '/install.php';
-        \$_SERVER['SCRIPT_NAME'] = '/install.php';
-        \$_SERVER['DOCUMENT_ROOT'] = '/var/www/html';
-        \$_SERVER['SCRIPT_FILENAME'] = '/var/www/html/install.php';
-        \$_SERVER['PHP_SELF'] = '/install.php';
-        \$_GET['goto'] = 'SilentInstall';
-        \$_GET['cli'] = true;
-        include 'install.php';
-    " 2>&1 | tail -30 || echo "==> PHP installer exited (see output above)"
-
-    if [ -f /var/www/html/config.php ]; then
-        echo "==> SuiteCRM installed successfully."
-    else
-        echo "==> Warning: config.php not found after install attempt."
-        echo "==> Web-based installer will be available at: $SITE_URL"
-    fi
+    chown www-data:www-data /var/www/html/config_si.php
+    echo "==> config_si.php written. Visit $SITE_URL to complete installation via web installer."
 else
     echo "==> SuiteCRM already installed (config.php present), skipping setup."
 fi

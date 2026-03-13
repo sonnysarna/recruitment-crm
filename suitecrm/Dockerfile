@@ -9,9 +9,6 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-jpeg --with-webp \
     && docker-php-ext-install \
        zip pdo pdo_mysql mysqli gd intl xml curl bcmath mbstring iconv \
-    && a2dismod mpm_event mpm_worker 2>/dev/null || true \
-    && a2enmod mpm_prefork \
-    && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
 # PHP tuning
@@ -52,6 +49,13 @@ RUN printf '<VirtualHost *:80>\n\
     ErrorLog ${APACHE_LOG_DIR}/error.log\n\
     CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
 </VirtualHost>\n' > /etc/apache2/sites-available/000-default.conf
+
+# Fix Apache MPM conflict: forcibly remove event/worker symlinks, enable only prefork
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.conf \
+           /etc/apache2/mods-enabled/mpm_event.load \
+           /etc/apache2/mods-enabled/mpm_worker.conf \
+           /etc/apache2/mods-enabled/mpm_worker.load && \
+    a2enmod mpm_prefork rewrite headers
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
