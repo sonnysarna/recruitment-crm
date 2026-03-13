@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy dependency files first (layer cache optimisation)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy application code
 COPY . .
