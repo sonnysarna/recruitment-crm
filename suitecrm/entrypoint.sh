@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+# Route stderr to stdout so Railway captures all output
+exec 2>&1
+
+echo "==> entrypoint.sh starting..."
 
 # Map Railway MySQL env vars to our expected vars
 DB_HOST="${MYSQLHOST:-${DATABASE_HOST:-mysql}}"
@@ -13,16 +16,17 @@ ADMIN_PASS="${SUITECRM_PASSWORD:-RecruiterAdmin2026!}"
 ADMIN_EMAIL="${SUITECRM_EMAIL:-admin@recruityear.com}"
 SITE_URL="${SITE_URL:-http://localhost}"
 
-echo "==> Waiting for MySQL at $DB_HOST:$DB_PORT..."
+echo "==> DB_HOST=$DB_HOST  DB_PORT=$DB_PORT  DB_NAME=$DB_NAME  DB_USER=$DB_USER"
+echo "==> Waiting for MySQL TCP port at $DB_HOST:$DB_PORT..."
 until (echo > /dev/tcp/$DB_HOST/$DB_PORT) 2>/dev/null; do
     echo "    MySQL not ready yet, retrying in 3s..."
     sleep 3
 done
-echo "==> MySQL is ready."
+echo "==> MySQL port is open."
 
 # Run silent install only once (config.php doesn't exist yet)
 if [ ! -f /var/www/html/config.php ]; then
-    echo "==> First run — starting SuiteCRM silent installer..."
+    echo "==> First run — writing config_si.php..."
 
     cat > /var/www/html/config_si.php << ENDCONFIG
 <?php
@@ -53,16 +57,7 @@ if [ ! -f /var/www/html/config.php ]; then
 );
 ENDCONFIG
 
-    # Start Apache temporarily so the installer can run over HTTP
-    apache2ctl start
-    sleep 3
-
-    echo "==> Running installer via HTTP..."
-    curl -s -o /tmp/install_out.txt -L \
-        "http://localhost/index.php?module=Administration&action=DiagnosticRun" \
-        -d "module=Configurator&action=index&setup_db_host_name=$DB_HOST" 2>&1 || true
-
-    # Use PHP CLI installer (more reliable)
+    echo "==> Running PHP CLI silent installer (this may take a few minutes)..."
     cd /var/www/html
     php -d memory_limit=512M -r "
         define('sugarEntry', true);
@@ -72,23 +67,27 @@ ENDCONFIG
         \$_GET['goto'] = 'SilentInstall';
         \$_GET['cli'] = true;
         include 'install.php';
-    " 2>&1 | tail -20 || true
-
-    apache2ctl stop
-    sleep 2
+    " 2>&1 | tail -30 || echo "==> PHP installer exited (see output above)"
 
     if [ -f /var/www/html/config.php ]; then
         echo "==> SuiteCRM installed successfully."
     else
-        echo "==> Silent install may not have completed. SuiteCRM web installer will be available at your URL."
+        echo "==> Warning: config.php not found after install attempt."
+        echo "==> Web-based installer will be available at: $SITE_URL"
     fi
 else
-    echo "==> SuiteCRM already installed, skipping setup."
+    echo "==> SuiteCRM already installed (config.php present), skipping setup."
 fi
 
-# Ensure upload dir exists and permissions are correct
+# Ensure correct permissions on writable dirs
+echo "==> Setting file permissions..."
 mkdir -p /var/www/html/upload /var/www/html/cache /var/www/html/custom
-chown -R www-data:www-data /var/www/html/upload /var/www/html/cache /var/www/html/custom /var/www/html/modules /var/www/html/themes 2>/dev/null || true
+chown -R www-data:www-data \
+    /var/www/html/upload \
+    /var/www/html/cache \
+    /var/www/html/custom \
+    /var/www/html/modules \
+    /var/www/html/themes 2>/dev/null || true
 
 echo "==> Starting Apache..."
 exec apache2-foreground
