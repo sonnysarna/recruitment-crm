@@ -14,7 +14,7 @@ ADMIN_EMAIL="${SUITECRM_EMAIL:-admin@recruityear.com}"
 SITE_URL="${SITE_URL:-http://localhost}"
 
 echo "==> Waiting for MySQL at $DB_HOST:$DB_PORT..."
-until mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT 1" >/dev/null 2>&1; do
+until (echo > /dev/tcp/$DB_HOST/$DB_PORT) 2>/dev/null; do
     echo "    MySQL not ready yet, retrying in 3s..."
     sleep 3
 done
