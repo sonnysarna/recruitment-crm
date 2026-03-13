@@ -73,5 +73,16 @@ chown -R www-data:www-data \
     /var/www/html/modules \
     /var/www/html/themes 2>/dev/null || true
 
+echo "==> Fixing Apache MPM configuration..."
+rm -f /etc/apache2/mods-enabled/mpm_event.conf \
+      /etc/apache2/mods-enabled/mpm_event.load \
+      /etc/apache2/mods-enabled/mpm_worker.conf \
+      /etc/apache2/mods-enabled/mpm_worker.load
+[ -L /etc/apache2/mods-enabled/mpm_prefork.load ] || \
+    ln -sf /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load
+[ -L /etc/apache2/mods-enabled/mpm_prefork.conf ] || \
+    ln -sf /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf 2>/dev/null || true
+echo "==> Active MPM mods: $(ls /etc/apache2/mods-enabled/ | grep mpm || echo 'none found')"
+
 echo "==> Starting Apache..."
 exec apache2-foreground
