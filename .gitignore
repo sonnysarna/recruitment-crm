@@ -1,0 +1,30 @@
+# Environment — NEVER commit this
+.env
+*.env
+
+# SSL certs
+nginx/certs/*.pem
+nginx/certs/*.crt
+nginx/certs/*.key
+
+# Node
+node_modules/
+api/node_modules/
+npm-debug.log*
+
+# Logs
+*.log
+api/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (local only)
+data/
+volumes/
+
+# IDE
+.idea/
+.vscode/
+*.swp

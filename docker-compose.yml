@@ -1,0 +1,145 @@
+version: "3.9"
+
+# ============================================================
+#  Recruitment CRM — Full Stack
+#  SuiteCRM + MySQL + Custom Recruitment API + Nginx
+#  Cloud-ready (Railway / Render / DigitalOcean / VPS)
+# ============================================================
+
+services:
+
+  # ── MySQL Database ───────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: recruit_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── SuiteCRM ─────────────────────────────────────────────
+  suitecrm:
+    build:
+      context: ./suitecrm
+      dockerfile: Dockerfile
+    container_name: recruit_suitecrm
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Database (uses Railway-style vars as primary, fallback to compose vars)
+      DATABASE_HOST: db
+      DATABASE_PORT: 3306
+      DATABASE_NAME: ${DB_NAME}
+      DATABASE_USER: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      # Admin credentials
+      SUITECRM_USERNAME: ${SUITECRM_ADMIN_USER}
+      SUITECRM_PASSWORD: ${SUITECRM_ADMIN_PASSWORD}
+      SUITECRM_EMAIL: ${SUITECRM_ADMIN_EMAIL}
+      SITE_URL: http://${APP_HOST}
+    volumes:
+      - suitecrm_data:/var/www/html/upload
+      - ./suitecrm/config/config_override.php:/var/www/html/config_override.php:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/index.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+
+  # ── Custom Recruitment API ────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: recruit_api
+    restart: unless-stopped
+    depends_on:
+      suitecrm:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # SuiteCRM connection (internal)
+      SUITECRM_URL: http://suitecrm:80
+      SUITECRM_CLIENT_ID: ${SUITECRM_API_CLIENT_ID}
+      SUITECRM_CLIENT_SECRET: ${SUITECRM_API_CLIENT_SECRET}
+      SUITECRM_ADMIN_USER: ${SUITECRM_ADMIN_USER}
+      SUITECRM_ADMIN_PASSWORD: ${SUITECRM_ADMIN_PASSWORD}
+      # JWT for our API
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      # App
+      APP_HOST: ${APP_HOST}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      # Optional: AI matching layer
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - api_logs:/app/logs
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Nginx Reverse Proxy ───────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: recruit_nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+      - suitecrm
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_certs:/etc/nginx/certs
+      - nginx_logs:/var/log/nginx
+    networks:
+      - internal
+      - external
+
+# ── Volumes ───────────────────────────────────────────────
+volumes:
+  db_data:
+    driver: local
+  suitecrm_data:
+    driver: local
+  api_logs:
+    driver: local
+  nginx_certs:
+    driver: local
+  nginx_logs:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge
+    internal: true      # SuiteCRM + DB not directly exposed
+  external:
+    driver: bridge      # Only Nginx is externally accessible
