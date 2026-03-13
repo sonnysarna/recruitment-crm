@@ -21,22 +21,17 @@ RUN { \
     echo "error_reporting = E_ALL & ~E_NOTICE & ~E_DEPRECATED"; \
     } > /usr/local/etc/php/conf.d/suitecrm.ini
 
-# Download SuiteCRM 7.14.4 release (pre-built, no composer needed)
+# Download SuiteCRM 7.14.4 into /opt/suitecrm (NOT /var/www/html which may be a volume mount)
 RUN curl -fsSL -o /tmp/suitecrm.zip \
     "https://github.com/salesagility/SuiteCRM/releases/download/v7.14.4/SuiteCRM-7.14.4.zip" \
     && unzip -q /tmp/suitecrm.zip -d /tmp/suitecrm_src \
-    && SUITECRM_DIR=$(find /tmp/suitecrm_src -name "index.php" -maxdepth 3 | head -1 | xargs dirname) \
-    && cp -r "$SUITECRM_DIR/." /var/www/html/ \
+    && SUITECRM_DIR=$(find /tmp/suitecrm_src -maxdepth 3 -name "index.php" | xargs grep -l "sugarEntry\|SuiteCRM" 2>/dev/null | head -1 | xargs dirname) \
+    && echo "Found SuiteCRM at: $SUITECRM_DIR" \
+    && mkdir -p /opt/suitecrm \
+    && cp -r "$SUITECRM_DIR/." /opt/suitecrm/ \
     && rm -rf /tmp/suitecrm.zip /tmp/suitecrm_src \
-    && chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html \
-    && chmod -R 775 \
-       /var/www/html/upload \
-       /var/www/html/cache \
-       /var/www/html/custom \
-       /var/www/html/modules \
-       /var/www/html/themes \
-       /var/www/html/data 2>/dev/null || true
+    && chown -R www-data:www-data /opt/suitecrm \
+    && chmod -R 755 /opt/suitecrm
 
 # Apache virtual host config
 RUN printf '<VirtualHost *:80>\n\

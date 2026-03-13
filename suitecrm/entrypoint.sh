@@ -24,6 +24,25 @@ until (echo > /dev/tcp/$DB_HOST/$DB_PORT) 2>/dev/null; do
 done
 echo "==> MySQL port is open."
 
+# Copy SuiteCRM files from image (/opt/suitecrm) into the webroot (/var/www/html)
+# This is needed because /var/www/html may be a Railway volume mount (empty on first run)
+if [ ! -f /var/www/html/index.php ]; then
+    echo "==> Copying SuiteCRM files from /opt/suitecrm to /var/www/html..."
+    cp -r /opt/suitecrm/. /var/www/html/
+    chown -R www-data:www-data /var/www/html
+    chmod -R 755 /var/www/html
+    chmod -R 775 \
+        /var/www/html/upload \
+        /var/www/html/cache \
+        /var/www/html/custom \
+        /var/www/html/modules \
+        /var/www/html/themes \
+        /var/www/html/data 2>/dev/null || true
+    echo "==> SuiteCRM files copied."
+else
+    echo "==> SuiteCRM files already present in /var/www/html."
+fi
+
 # Write silent-install config so the web installer auto-populates on first visit
 if [ ! -f /var/www/html/config.php ]; then
     echo "==> First run — writing config_si.php for web installer..."
